@@ -2,8 +2,9 @@
 This module can send service status and information message to dashboard Dashing.
 
 I use this to control scripts execution from [Dashing](https://github.com/Shopify/dashing/).
+I use [this widget](https://gist.github.com/strike/1a1ecda52849362215bc).
 
-Also I make the module "public" (all PS scripts can import it).
+Also I make the module "public" (all PS scripts can import it). 
 For this:
 
 1. clone the module to folder `C:\Program Files\Common Files\Modules\`
