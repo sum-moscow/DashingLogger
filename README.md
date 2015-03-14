@@ -13,6 +13,7 @@ For this:
 
 
 # Usage
+## Only Dashing
 ```PowerShell
 # Import module
 Import-Module DashingLogger
@@ -22,4 +23,19 @@ Set-Dashing -Service SomeSerive -Url SomeUrl -Token SomeToken -Asynchron
 Write-Dashing -Status ok -Message "All is ok"
 # or
 Write-DashingOk "All is ok"
+```
+## As logger
+```PowerShell
+# Import module
+Import-Module DashingLogger
+# Init
+Log-Set -Service SomeSerive -Url SomeUrl -Token SomeToken
+# Begin logging
+Log-Begin
+# Write [ok] log
+Log("SomeMessage") # in this equal function: Write-DashingRunning -Message "SomeMessage"
+# Write warning log
+Log-Warning("Something Is Bad")
+# Write critical log and end logging
+Log-Critical("Fatality") -End # equal: Log-Critical("Fatality"); Log-End
 ```
