@@ -29,6 +29,9 @@
    # or
    Write-DashingOk "All is ok"
 
+ .Example
+   
+
 #>
 
 [String]$Script:Service
@@ -37,6 +40,14 @@
 
 [Bool]$Script:Uninitialized = $true
 [Bool]$Script:Asynchron
+[Bool]$Script:Echo = $true
+
+[Int]$Script:Oks = 0
+[Int]$Script:Warnings = 0
+[Int]$Script:Criticals = 0
+
+# For Log-* functions
+[Bool]$Script:ScriptRunning = $false
 
 Function Set-Dashing {
     Param (
@@ -50,13 +61,17 @@ Function Set-Dashing {
         [String]$Token = "",
 
         [Parameter()]
-        [Switch]$Asynchron 
+        [Switch]$Asynchron,
+
+        [Parameter()]
+        [Switch]$NoEcho 
     )
 
     $Script:Service = $Service
     $Script:Url = $Url
     $Script:Token = $Token
     $Script:Asynchron = $Asynchron
+    $Script:Echo = !$NoEcho
 
     $Script:Uninitialized = $false
 }
@@ -78,6 +93,10 @@ Function Write-Dashing {
     if ($Script:Uninitialized){
         Error-NeedSet-Dashing
         Return
+    }
+
+    if ($Script:Echo){
+        Echo $Message
     }
 
     $PostParams = ( @{ auth_token=$Script:Token; status=$Status; message=$Message}  | ConvertTo-Json)
@@ -142,6 +161,74 @@ Function Write-DashingUnknown([String]$Message) {
 
 }
 
+# Log function
+Function Log-Begin([String]$Message) {
+    $Script:Ok = 0
+    $Script:Warnings = 0
+    $Script:Criticals = 0
+
+    $Script:ScriptRunning = $true
+    Write-DashingRunning 
+}
+
+Function Log-Ok([String]$Message) {
+    $Script:Oks++
+    if ($Script:ScriptRunning){
+        Write-DashingRunning -Message $Message
+    } else {
+        Write-DashingOk -Message $Message
+    }
+}
+
+Function Log-Warning([String]$Message) {
+    $Script:Warnings++
+    if ($Script:ScriptRunning){
+        Write-DashingRunning -Message "Warning: $Message"
+    } else {
+        Write-DashingWarning -Message $Message
+    }
+}
+
+Function Log-Critical([String]$Message,[Switch]$End) {
+    $Script:Criticals++
+
+    if ($End){
+        $Script:ScriptRunning = $false
+    }
+
+    if ($Script:ScriptRunning){
+        Write-DashingRunning -Message "Critical: $Message"
+    } else {
+        Write-DashingCritical -Message $Message
+    }
+}
+
+Function Log-End([String]$Message,[Switch]$Statistic) {
+    if ($Statistic){
+        if (!$Message) { $Message = "" }
+        $Message += "Oks: $($Script:Ok)`n"
+        $Message += "Warnings: $($Script:Warnings)`n"
+        $Message += "Criticals: $($Script:Criticals)`n"
+    }
+
+    if ($Script:Criticals -gt 0){
+        Write-DashingCritical -Message $Message
+    } elseif ($Script:Warnings -gt 0){
+        Write-DashingWarning -Message $Message
+    } else {
+        Write-DashingOk -Message $Message
+    }
+
+    $Script:ScriptRunning = $false
+}
+
+# Create aliases
+New-Alias -Name Log-Set -Value Set-Dashing
+
+New-Alias -Name Log -Value Log-Ok
+New-Alias -Name Log-Stop -Value Log-End
+
 # Make a function public 
-Export-ModuleMember -function Set-Dashing,Write-Dashing
-Export-ModuleMember -function Write-DashingOk,Write-DashingRunning,Write-DashingWarning,Write-DashingCritical,Write-DashingUnknown
+Export-ModuleMember -Function Set-Dashing,Write-Dashin,Write-DashingResult -Alias Log-Set
+Export-ModuleMember -Function Write-DashingOk,Write-DashingRunning,Write-DashingWarning,Write-DashingCritical,Write-DashingUnknown
+Export-ModuleMember -Function Log-Begin,Log-Ok,Log-Warning,Log-Critical,Log-End -Alias Log,Log-Stop 
