@@ -1,9 +1,9 @@
 ﻿<# 
     .Synopsis
-        This module can send service status and information message to Dashing dashboard.
+        This module can send service status and information message to Dashing dashboard and Windows event log service
 
     .DeScription
-        This module can send service status and information message to Dashing dashboard.
+        This module can send service status and information message to Dashing dashboard and Windows event log service
 
         I use this to control scripts execution from Dashing.
         (http://dashing.io/ or https://github.com/Shopify/dashing )
@@ -52,6 +52,7 @@
 [Bool]$Script:Uninitialized = $true
 [Bool]$Script:Asynchron
 [Bool]$Script:Echo = $true
+[Bool]$Script:WindowsLog = $true
 
 [Int]$Script:Oks = 0
 [Int]$Script:Warnings = 0
@@ -75,7 +76,10 @@ Function Set-Dashing {
         [Switch]$Asynchron,
 
         [Parameter()]
-        [Switch]$NoEcho 
+        [Switch]$NoEcho,
+
+        [Parameter()]
+        [Switch]$NoWindowsLog 
     )
 
     $Script:Service = $Service
@@ -83,9 +87,11 @@ Function Set-Dashing {
     $Script:Token = $Token
     $Script:Asynchron = $Asynchron
     $Script:Echo = !$NoEcho
+    $Script:WindowsLog = !$NoWindowsLog
 
     $Script:Uninitialized = $false
 }
+
 
 Function Error-NeedSet-Dashing{
     Write-Error "You need init service with command Set-Dashing -Service ServiceName -Url SomeUrl -Token SomeToken"
@@ -179,11 +185,21 @@ Function Log-Begin([String]$Message) {
     $Script:Criticals = 0
 
     $Script:ScriptRunning = $true
+    if ($Script:WindowsLog){
+        New-EventLog –LogName Application –Source $Script:Service -ErrorAction SilentlyContinue
+        Write-EventLog –LogName Application –Source $Script:Service –EntryType Information -EventId 1 –Message "Begin: $Message"
+    }
+
     Write-DashingRunning 
 }
 
 Function Log-Ok([String]$Message) {
     $Script:Oks++
+
+    if ($Script:WindowsLog){
+        Write-EventLog –LogName Application –Source $Script:Service –EntryType Information -EventId 2 –Message "Ok: $Message"
+    }
+
     if ($Script:ScriptRunning){
         Write-DashingRunning -Message $Message
     } else {
@@ -193,6 +209,11 @@ Function Log-Ok([String]$Message) {
 
 Function Log-Warning([String]$Message) {
     $Script:Warnings++
+
+    if ($Script:WindowsLog){
+        Write-EventLog –LogName Application –Source $Script:Service –EntryType Warning -EventId 3 –Message "Warning: $Message"
+    }
+
     if ($Script:ScriptRunning){
         Write-DashingRunning -Message "Warning: $Message"
     } else {
@@ -205,6 +226,14 @@ Function Log-Critical([String]$Message,[Switch]$End) {
 
     if ($End){
         $Script:ScriptRunning = $false
+    }
+
+    if ($Script:WindowsLog){
+        if ($End){
+            Write-EventLog –LogName Application –Source $Script:Service –EntryType FailureAudit -EventId 4 –Message "$Message Exiting..."
+        } else {
+            Write-EventLog –LogName Application –Source $Script:Service –EntryType Error -EventId 5 –Message "Critical: $Message"
+        }
     }
 
     if ($Script:ScriptRunning){
@@ -222,12 +251,19 @@ Function Log-End([String]$Message,[Switch]$Statistic) {
         $Message += "Criticals: $($Script:Criticals)`n"
     }
 
+    $WType = "FailureAudit"
+
     if ($Script:Criticals -gt 0){
         Write-DashingCritical -Message $Message
     } elseif ($Script:Warnings -gt 0){
         Write-DashingWarning -Message $Message
     } else {
+        $WType = "SuccessAudit"
         Write-DashingOk -Message $Message
+    }
+
+    if ($Script:WindowsLog){
+        Write-EventLog –LogName Application –Source $Script:Service –EntryType $WType -EventId 6 –Message "$Message Exiting..."
     }
 
     $Script:ScriptRunning = $false
